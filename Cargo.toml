@@ -1,0 +1,12 @@
+[package]
+name = "embedded-epd"
+version = "0.1.0"
+authors = ["Mathias Gottschlag <mgottschlag@gmail.com>"]
+description = "embedded-hal driver for e-paper displays"
+edition = "2018"
+license = "MIT"
+repository = "https://github.com/mgottschlag/rust-embedded-epd"
+
+[dependencies]
+embedded-hal = "0.2.1"
+
