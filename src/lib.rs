@@ -25,9 +25,6 @@ pub trait Display {
     fn start_frame(&mut self) -> nb::Result<(), Error>;
     fn end_frame(&mut self);
 
-    /*fn start_partial(&mut self, left: u32, top: u32, right: u32, bottom: u32) -> nb::Result<(), Error>;
-    fn end_partial(&mut self);*/
-
     fn fill(&mut self, width: u32, color: Color);
     fn pixel(&mut self, color: Color);
 
@@ -38,4 +35,15 @@ pub trait Display {
     fn height(&self) -> u32 {
         Self::HEIGHT
     }
+}
+
+pub trait PartialRefresh {
+    fn start_partial(
+        &mut self,
+        left: u32,
+        top: u32,
+        right: u32,
+        bottom: u32,
+    ) -> nb::Result<(), Error>;
+    fn end_partial(&mut self);
 }

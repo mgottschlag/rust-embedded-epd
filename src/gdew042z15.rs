@@ -192,14 +192,6 @@ where
         self.delay_10ms();
     }
 
-    /*fn start_partial(&mut self, left: u32, top: u32, right: u32, bottom: u32) {
-        // TODO
-    }
-    
-    fn end_partial(&mut self) {
-        // TODO
-    }*/
-
     fn fill(&mut self, mut width: u32, color: Color) {
         if self.current_pixel_count as u32 + width < 8 {
             self.current_pixels <<= width;
