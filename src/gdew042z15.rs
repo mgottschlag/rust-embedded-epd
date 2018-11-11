@@ -1,8 +1,4 @@
-use crate::{Color, Display, Error};
-
-/// Custom time type. The timer is supposed to expire in the specified frequency.
-#[derive(Clone, Copy)]
-pub struct Hertz(pub u32);
+use crate::{Color, Display, Error, Hertz};
 
 enum InitState {
     Uninitialized,
@@ -114,6 +110,17 @@ where
         }
     }
 
+    pub fn destroy(self) -> (SPI, Busy, Reset, DataCmd, CS, Timer) {
+        (
+            self.spi,
+            self.busy,
+            self.reset,
+            self.data_cmd,
+            self.cs,
+            self.timer,
+        )
+    }
+
     fn send_command(&mut self, command: DisplayCommand) {
         self.data_cmd.set_low();
         self.cs.set_low();
@@ -213,6 +220,7 @@ where
             if let Color::Black = color {
                 while width >= 8 {
                     self.send_data(0xff);
+                    width -= 8;
                 }
             } else {
                 while width >= 8 {

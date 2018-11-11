@@ -8,6 +8,10 @@ pub mod gdew042z15;
 
 pub enum Error {}
 
+/// Custom time type. The timer is supposed to expire in the specified frequency.
+#[derive(Clone, Copy)]
+pub struct Hertz(pub u32);
+
 #[derive(Copy, Clone)]
 pub enum Color {
     Black,
@@ -26,4 +30,12 @@ pub trait Display {
 
     fn fill(&mut self, width: u32, color: Color);
     fn pixel(&mut self, color: Color);
+
+    fn width(&self) -> u32 {
+        Self::WIDTH
+    }
+
+    fn height(&self) -> u32 {
+        Self::HEIGHT
+    }
 }
