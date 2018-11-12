@@ -201,15 +201,17 @@ where
             self.current_pixel_count += width as u8;
         } else {
             // Complete the first byte.
-            let remainder = 8 - self.current_pixel_count;
-            self.current_pixels <<= 8 - self.current_pixel_count;
-            if let Color::Black = color {
-                self.current_pixels |= 0xff >> self.current_pixel_count;
+            if self.current_pixel_count != 0 {
+                let remainder = 8 - self.current_pixel_count;
+                self.current_pixels <<= 8 - self.current_pixel_count;
+                if let Color::White = color {
+                    self.current_pixels |= 0xff >> self.current_pixel_count;
+                }
+                self.send_data(self.current_pixels);
+                width -= remainder as u32;
             }
-            self.send_data(self.current_pixels);
-            width -= remainder as u32;
             // Send as many full bytes as possible.
-            if let Color::Black = color {
+            if let Color::White = color {
                 while width >= 8 {
                     self.send_data(0xff);
                     width -= 8;
@@ -221,7 +223,11 @@ where
                 }
             }
             // Last partial byte.
-            self.current_pixels = 0xff >> (8 - width);
+            if let Color::White = color {
+                self.current_pixels = 0xff >> (8 - width);
+            } else {
+                self.current_pixels = 0;
+            }
             self.current_pixel_count = width as u8;
         }
     }

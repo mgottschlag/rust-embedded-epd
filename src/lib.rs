@@ -14,8 +14,8 @@ pub struct Hertz(pub u32);
 
 #[derive(Copy, Clone)]
 pub enum Color {
-    Black,
     White,
+    Black,
 }
 
 pub trait Display {
