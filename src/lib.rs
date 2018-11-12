@@ -5,6 +5,7 @@ extern crate embedded_hal;
 extern crate nb;
 
 pub mod gdew042z15;
+pub mod gui;
 
 pub enum Error {}
 
