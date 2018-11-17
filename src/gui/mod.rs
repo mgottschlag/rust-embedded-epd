@@ -2,6 +2,9 @@ use crate::{Color, Display, PartialRefresh};
 
 use core::cmp::max;
 
+pub mod font;
+pub mod rle;
+
 pub trait GUIElement {
     fn resize(&mut self, width: u32, height: u32);
     fn min_size(&self) -> (u32, u32);
@@ -302,6 +305,95 @@ where
     }
 }
 
+pub enum HorizontalAlign {
+    Left,
+    Center,
+    Right,
+}
+
+pub enum VerticalAlign {
+    Top,
+    Center,
+    Bottom,
+}
+
+pub struct Align<Element>
+where
+    Element: GUIElement,
+{
+    horizontal: HorizontalAlign,
+    vertical: VerticalAlign,
+    element: Element,
+    width: u32,
+    height: u32,
+}
+
+impl<Element> Align<Element>
+where
+    Element: GUIElement,
+{
+    pub fn new(
+        horizontal: HorizontalAlign,
+        vertical: VerticalAlign,
+        element: Element,
+    ) -> Align<Element> {
+        Align {
+            horizontal: horizontal,
+            vertical: vertical,
+            element: element,
+            width: 0,
+            height: 0,
+        }
+    }
+}
+
+impl<Element> GUIElement for Align<Element>
+where
+    Element: GUIElement,
+{
+    fn resize(&mut self, width: u32, height: u32) {
+        self.width = width;
+        self.height = height;
+        self.element.resize(width, height);
+    }
+
+    fn min_size(&self) -> (u32, u32) {
+        (0, 0)
+    }
+
+    fn size(&self) -> (u32, u32) {
+        (self.width, self.height)
+    }
+
+    fn render_line_clipped<DisplayType>(
+        &self,
+        display: &mut DisplayType,
+        y: u32,
+        left: u32,
+        right: u32,
+    ) where
+        DisplayType: Display,
+    {
+        let (element_width, element_height) = self.element.size();
+        let x_offset = match self.horizontal {
+            HorizontalAlign::Left => 0,
+            HorizontalAlign::Center => (self.width as i32 - element_width as i32) / 2,
+            HorizontalAlign::Right => (self.width as i32 - element_width as i32),
+        };
+        let y_offset = match self.vertical {
+            VerticalAlign::Top => 0,
+            VerticalAlign::Center => (self.height as i32 - element_height as i32) / 2,
+            VerticalAlign::Bottom => (self.height as i32 - element_height as i32),
+        };
+        self.element.render_line(
+            display,
+            y as i32 - y_offset,
+            left as i32 - x_offset,
+            right as i32 - x_offset,
+        );
+    }
+}
+
 pub struct Fill {
     color: Color,
     width: u32,
@@ -342,5 +434,50 @@ impl GUIElement for Fill {
         DisplayType: Display,
     {
         display.fill(right - left, self.color);
+    }
+}
+
+pub struct Text {
+    text: &'static str,
+    font: &'static font::Font,
+    width: u32,
+    height: u32,
+}
+
+impl Text {
+    pub fn new(text: &'static str, font: &'static font::Font) -> Text {
+        let (width, height) = font.get_text_size(text);
+        Text {
+            text: text,
+            font: font,
+            width: width,
+            height: height,
+        }
+    }
+}
+
+impl GUIElement for Text {
+    fn resize(&mut self, width: u32, height: u32) {
+        // Ignore, as the font dictates the size of the text.
+    }
+
+    fn min_size(&self) -> (u32, u32) {
+        (self.width, self.height)
+    }
+
+    fn size(&self) -> (u32, u32) {
+        (self.width, self.height)
+    }
+
+    fn render_line_clipped<DisplayType>(
+        &self,
+        display: &mut DisplayType,
+        y: u32,
+        left: u32,
+        right: u32,
+    ) where
+        DisplayType: Display,
+    {
+        self.font.render_line(display, self.text, y, left, right);
     }
 }
