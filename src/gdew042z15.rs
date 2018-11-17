@@ -195,7 +195,7 @@ where
     fn fill(&mut self, mut width: u32, color: Color) {
         if self.current_pixel_count as u32 + width < 8 {
             self.current_pixels <<= width;
-            if let Color::Black = color {
+            if let Color::White = color {
                 self.current_pixels |= 0xff >> (8 - width);
             }
             self.current_pixel_count += width as u8;
