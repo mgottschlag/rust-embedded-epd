@@ -1,4 +1,4 @@
-use crate::{Color, Display, Error, Hertz};
+use crate::{BytePacking, Color, Display, Error, Hertz};
 
 enum InitState {
     Uninitialized,
@@ -17,8 +17,7 @@ pub struct GDEW042Z15<SPI, Busy, Reset, DataCmd, CS, Timer> {
     cs: CS,
     timer: Timer,
     init_state: InitState,
-    current_pixels: u8,
-    current_pixel_count: u8,
+    byte_packing: BytePacking,
 }
 
 impl<SPI, Busy, Reset, DataCmd, CS, Timer> GDEW042Z15<SPI, Busy, Reset, DataCmd, CS, Timer>
@@ -49,8 +48,7 @@ where
             cs: cs,
             timer: timer,
             init_state: InitState::Uninitialized,
-            current_pixels: 0,
-            current_pixel_count: 0,
+            byte_packing: BytePacking::new(),
         }
     }
 
@@ -170,8 +168,7 @@ where
         }
         self.send_command(DisplayCommand::DataStartTransmission1);
         self.delay_2ms();
-        self.current_pixels = 0;
-        self.current_pixel_count = 0;
+        self.byte_packing = BytePacking::new();
         Ok(())
     }
 
@@ -192,54 +189,20 @@ where
         self.delay_10ms();
     }
 
-    fn fill(&mut self, mut width: u32, color: Color) {
-        if self.current_pixel_count as u32 + width < 8 {
-            self.current_pixels <<= width;
-            if let Color::White = color {
-                self.current_pixels |= 0xff >> (8 - width);
-            }
-            self.current_pixel_count += width as u8;
-        } else {
-            // Complete the first byte.
-            if self.current_pixel_count != 0 {
-                let remainder = 8 - self.current_pixel_count;
-                self.current_pixels <<= 8 - self.current_pixel_count;
-                if let Color::White = color {
-                    self.current_pixels |= 0xff >> self.current_pixel_count;
-                }
-                self.send_data(self.current_pixels);
-                width -= remainder as u32;
-            }
-            // Send as many full bytes as possible.
-            if let Color::White = color {
-                while width >= 8 {
-                    self.send_data(0xff);
-                    width -= 8;
-                }
-            } else {
-                while width >= 8 {
-                    self.send_data(0x0);
-                    width -= 8;
-                }
-            }
-            // Last partial byte.
-            if let Color::White = color {
-                self.current_pixels = 0xff >> (8 - width);
-            } else {
-                self.current_pixels = 0;
-            }
-            self.current_pixel_count = width as u8;
-        }
+    fn fill(&mut self, width: u32, color: Color) {
+        let mut bp = self.byte_packing.clone();
+        bp.fill(self, width, color);
+        self.byte_packing = bp;
     }
 
     fn pixel(&mut self, color: Color) {
-        self.current_pixels = (self.current_pixels << 1) | color as u8;
-        self.current_pixel_count += 1;
-        if self.current_pixel_count == 8 {
-            self.send_data(self.current_pixels);
-            self.current_pixels = 0;
-            self.current_pixel_count = 0;
-        }
+        let mut bp = self.byte_packing.clone();
+        bp.pixel(self, color);
+        self.byte_packing = bp;
+    }
+
+    fn put_byte(&mut self, byte: u8) {
+        self.send_data(byte);
     }
 }
 

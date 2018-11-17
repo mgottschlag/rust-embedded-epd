@@ -1,6 +1,5 @@
 #![no_std]
 extern crate embedded_hal;
-
 #[macro_use(block)]
 extern crate nb;
 
@@ -29,6 +28,8 @@ pub trait Display {
     fn fill(&mut self, width: u32, color: Color);
     fn pixel(&mut self, color: Color);
 
+    fn put_byte(&mut self, byte: u8);
+
     fn width(&self) -> u32 {
         Self::WIDTH
     }
@@ -47,4 +48,75 @@ pub trait PartialRefresh {
         bottom: u32,
     ) -> nb::Result<(), Error>;
     fn end_partial(&mut self);
+}
+
+#[derive(Clone)]
+pub struct BytePacking {
+    current_pixels: u8,
+    current_pixel_count: u8,
+}
+
+impl BytePacking {
+    fn new() -> BytePacking {
+        BytePacking {
+            current_pixels: 0,
+            current_pixel_count: 0,
+        }
+    }
+
+    fn fill<DisplayType>(&mut self, display: &mut DisplayType, mut width: u32, color: Color)
+    where
+        DisplayType: Display,
+    {
+        if self.current_pixel_count as u32 + width < 8 {
+            self.current_pixels <<= width;
+            if let Color::White = color {
+                self.current_pixels |= 0xff >> (8 - width);
+            }
+            self.current_pixel_count += width as u8;
+        } else {
+            // Complete the first byte.
+            if self.current_pixel_count != 0 {
+                let remainder = 8 - self.current_pixel_count;
+                self.current_pixels <<= 8 - self.current_pixel_count;
+                if let Color::White = color {
+                    self.current_pixels |= 0xff >> self.current_pixel_count;
+                }
+                display.put_byte(self.current_pixels);
+                width -= remainder as u32;
+            }
+            // Send as many full bytes as possible.
+            if let Color::White = color {
+                while width >= 8 {
+                    display.put_byte(0xff);
+                    width -= 8;
+                }
+            } else {
+                while width >= 8 {
+                    display.put_byte(0x0);
+                    width -= 8;
+                }
+            }
+            // Last partial byte.
+            if let Color::White = color {
+                self.current_pixels = 0xff >> (8 - width);
+            } else {
+                self.current_pixels = 0;
+            }
+            self.current_pixel_count = width as u8;
+        }
+    }
+
+    fn pixel<DisplayType>(&mut self, display: &mut DisplayType, color: Color)
+    where
+        DisplayType: Display,
+    {
+        self.current_pixels = (self.current_pixels << 1) | color as u8;
+        self.current_pixel_count += 1;
+        if self.current_pixel_count == 8 {
+            display.put_byte(self.current_pixels);
+            self.current_pixels = 0;
+            self.current_pixel_count = 0;
+        }
+    }
 }
