@@ -85,8 +85,8 @@ impl<'a> RowRenderer<'a> {
         let (left, right) = line_clip.get();
         let (left_index, right_index) = ((left >> 3) as usize, (right >> 3) as usize);
         let (left_offset, right_offset) = (left & 7, right & 7);
-        let left_mask = 0xffu8 << left_offset;
-        let right_mask = (0x00ffu16 >> (8 - right_offset)) as u8;
+        let left_mask = 0xffu8 >> left_offset;
+        let right_mask = (0xff00u16 >> right_offset) as u8;
 
         if left_index == right_index {
             // Both ends are in the same byte.
@@ -103,13 +103,17 @@ impl<'a> RowRenderer<'a> {
                 for i in (left_index + 1)..right_index {
                     self.buffer[i] = 0xff;
                 }
-                self.buffer[right_index] |= right_mask;
+                if right_offset != 0 {
+                    self.buffer[right_index] |= right_mask;
+                }
             } else {
                 self.buffer[left_index] &= !left_mask;
                 for i in (left_index + 1)..right_index {
                     self.buffer[i] = 0x0;
                 }
-                self.buffer[right_index] &= !right_mask;
+                if right_offset != 0 {
+                    self.buffer[right_index] &= !right_mask;
+                }
             }
         }
     }
@@ -270,6 +274,13 @@ impl Display for TestDisplay {
 mod tests {
     use super::{Color, RowRenderer};
 
+    #[test]
+    #[should_panic]
+    fn test_row_renderer_new_panic() {
+        let mut buffer = [0u8];
+        RowRenderer::new(&mut buffer, 12);
+    }
+
     struct FillTest {
         before: [u8; 4],
         clip: (i32, i32),
@@ -286,14 +297,14 @@ mod tests {
                 clip: (0, 32),
                 fill: (4, 16),
                 color: Color::White,
-                ok: [0xf0, 0xff, 0x0, 0x0],
+                ok: [0x0f, 0xff, 0x0, 0x0],
             },
             FillTest {
                 before: [0; 4],
                 clip: (0, 32),
                 fill: (4, 20),
                 color: Color::White,
-                ok: [0xf0, 0xff, 0x0f, 0x0],
+                ok: [0x0f, 0xff, 0xf0, 0x0],
             },
             FillTest {
                 before: [0; 4],
@@ -335,7 +346,7 @@ mod tests {
                 clip: (9, 32),
                 fill: (4, 12),
                 color: Color::White,
-                ok: [0, 0xe, 0, 0],
+                ok: [0, 0x70, 0, 0],
             },
             FillTest {
                 before: [0; 4],
@@ -343,6 +354,13 @@ mod tests {
                 fill: (4, 12),
                 color: Color::White,
                 ok: [0, 0, 0, 0],
+            },
+            FillTest {
+                before: [0; 4],
+                clip: (0, 32),
+                fill: (16, 32),
+                color: Color::White,
+                ok: [0, 0, 0xff, 0xff],
             },
         ];
         for test in &tests {
