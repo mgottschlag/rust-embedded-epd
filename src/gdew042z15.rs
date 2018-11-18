@@ -1,11 +1,10 @@
-use crate::{BytePacking, Color, Display, Error, Hertz};
+use crate::{Display, Error, Hertz};
 
 enum InitState {
     Uninitialized,
     Resetting1,
     Resetting2,
     Resetting3,
-    // TODO
     Initialized,
 }
 
@@ -17,7 +16,6 @@ pub struct GDEW042Z15<SPI, Busy, Reset, DataCmd, CS, Timer> {
     cs: CS,
     timer: Timer,
     init_state: InitState,
-    byte_packing: BytePacking,
 }
 
 impl<SPI, Busy, Reset, DataCmd, CS, Timer> GDEW042Z15<SPI, Busy, Reset, DataCmd, CS, Timer>
@@ -48,7 +46,6 @@ where
             cs: cs,
             timer: timer,
             init_state: InitState::Uninitialized,
-            byte_packing: BytePacking::new(),
         }
     }
 
@@ -168,7 +165,6 @@ where
         }
         self.send_command(DisplayCommand::DataStartTransmission1);
         self.delay_2ms();
-        self.byte_packing = BytePacking::new();
         Ok(())
     }
 
@@ -189,20 +185,11 @@ where
         self.delay_10ms();
     }
 
-    fn fill(&mut self, width: u32, color: Color) {
-        let mut bp = self.byte_packing.clone();
-        bp.fill(self, width, color);
-        self.byte_packing = bp;
-    }
-
-    fn pixel(&mut self, color: Color) {
-        let mut bp = self.byte_packing.clone();
-        bp.pixel(self, color);
-        self.byte_packing = bp;
-    }
-
-    fn put_byte(&mut self, byte: u8) {
-        self.send_data(byte);
+    fn draw_row(&mut self, row: &[u8]) {
+        assert!(row.len() >= Self::WIDTH as usize / 8);
+        for i in 0..Self::WIDTH as usize / 8 {
+            self.send_data(row[i]);
+        }
     }
 }
 

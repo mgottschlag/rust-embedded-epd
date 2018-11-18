@@ -1,4 +1,4 @@
-use crate::{Color, Display, PartialRefresh};
+use crate::{ClipRow, Color, Display, PartialRefresh, RowRenderer};
 
 use core::cmp::max;
 
@@ -10,45 +10,7 @@ pub trait GUIElement {
     fn min_size(&self) -> (u32, u32);
     fn size(&self) -> (u32, u32);
 
-    fn render_line<DisplayType>(&self, display: &mut DisplayType, y: i32, mut left: i32, right: i32)
-    where
-        DisplayType: Display,
-    {
-        if right <= left {
-            return;
-        }
-        if right <= 0 {
-            return;
-        }
-        if y < 0 {
-            display.fill((right - left) as u32, Color::White);
-        } else if y as u32 >= self.size().1 {
-            display.fill((right - left) as u32, Color::White);
-        } else {
-            if left < 0 {
-                display.fill(-left as u32, Color::White);
-                left = 0;
-            }
-            let y = y as u32;
-            let left = left as u32;
-            let right = right as u32;
-            if right > self.size().0 {
-                self.render_line_clipped(display, y, left, self.size().0);
-                display.fill(right - self.size().0, Color::White);
-            } else {
-                self.render_line_clipped(display, y, left, right);
-            }
-        }
-    }
-
-    fn render_line_clipped<DisplayType>(
-        &self,
-        display: &mut DisplayType,
-        y: u32,
-        left: u32,
-        right: u32,
-    ) where
-        DisplayType: Display;
+    fn render_row(&self, row: &mut RowRenderer, clip: &ClipRow, y: i32, offset: i32);
 }
 
 pub struct Layout<Root>
@@ -74,13 +36,21 @@ where
         };
     }
 
-    pub fn render<DisplayType>(&self, display: &mut DisplayType)
+    pub fn render<DisplayType>(&self, display: &mut DisplayType, row_buffer: &mut [u8])
     where
         DisplayType: Display,
     {
         for i in 0..self.height {
-            self.root
-                .render_line(display, i as i32, 0, self.width as i32);
+            // Draw white background.
+            for i in 0..row_buffer.len() {
+                row_buffer[i] = 0xff;
+            }
+            // Draw the row.
+            let mut row_renderer = RowRenderer::new(row_buffer, self.width);
+            let clip = row_renderer.full_row();
+            self.root.render_row(&mut row_renderer, &clip, i as i32, 0);
+            row_renderer.finish();
+            display.draw_row(row_buffer);
         }
     }
 
@@ -91,13 +61,23 @@ where
         top: u32,
         right: u32,
         bottom: u32,
+        row_buffer: &mut [u8],
     ) where
         DisplayType: Display + PartialRefresh,
     {
         // TODO: Check whether right/bottom are smaller than width/height?
         for i in top..bottom {
-            self.root
-                .render_line(display, i as i32, left as i32, right as i32);
+            // Draw white background.
+            for i in 0..row_buffer.len() {
+                row_buffer[i] = 0xff;
+            }
+            // Draw the row.
+            let mut row_renderer = RowRenderer::new(row_buffer, DisplayType::WIDTH);
+            let clip = row_renderer.full_row().clip(left as i32, right as i32);
+            self.root.render_row(&mut row_renderer, &clip, i as i32, 0);
+            row_renderer.finish();
+
+            display.draw_partial_row(row_buffer);
         }
     }
 }
@@ -175,36 +155,20 @@ where
         (self.width, self.height)
     }
 
-    fn render_line_clipped<DisplayType>(
-        &self,
-        display: &mut DisplayType,
-        y: u32,
-        left: u32,
-        right: u32,
-    ) where
-        DisplayType: Display,
-    {
+    fn render_row(&self, row: &mut RowRenderer, clip: &ClipRow, y: i32, offset: i32) {
+        let clip = clip.clip(offset, offset + self.width as i32);
         let split_at = match self.mode {
             HorizontalSplitMode::ExpandLeft(split_at) => self.width - split_at,
             HorizontalSplitMode::ExpandRight(split_at) => split_at,
-        };
-        if split_at >= right {
-            // Only draw left part.
-            self.left
-                .render_line(display, y as i32, left as i32, right as i32);
-        } else if split_at <= left {
-            // Only draw right part.
-            self.right.render_line(
-                display,
-                y as i32,
-                (left - split_at) as i32,
-                (right - split_at) as i32,
-            );
-        } else {
-            self.left
-                .render_line(display, y as i32, left as i32, split_at as i32);
+        } as i32;
+        let clip_left = clip.clip(offset, offset + split_at);
+        if !clip_left.is_empty() {
+            self.left.render_row(row, &clip_left, y, offset);
+        }
+        let clip_right = clip.clip(offset + split_at, offset + self.width as i32);
+        if !clip_left.is_empty() {
             self.right
-                .render_line(display, y as i32, 0, (right - split_at) as i32);
+                .render_row(row, &clip_right, y, offset + split_at);
         }
     }
 }
@@ -282,25 +246,15 @@ where
         (self.width, self.height)
     }
 
-    fn render_line_clipped<DisplayType>(
-        &self,
-        display: &mut DisplayType,
-        y: u32,
-        left: u32,
-        right: u32,
-    ) where
-        DisplayType: Display,
-    {
+    fn render_row(&self, row: &mut RowRenderer, clip: &ClipRow, y: i32, offset: i32) {
         let split_at = match self.mode {
             VerticalSplitMode::ExpandTop(split_at) => self.height - split_at,
             VerticalSplitMode::ExpandBottom(split_at) => split_at,
-        };
+        } as i32;
         if y < split_at {
-            self.top
-                .render_line(display, y as i32, left as i32, right as i32);
+            self.top.render_row(row, clip, y, offset);
         } else {
-            self.bottom
-                .render_line(display, (y - split_at) as i32, left as i32, right as i32);
+            self.bottom.render_row(row, clip, y - split_at, offset);
         }
     }
 }
@@ -365,15 +319,7 @@ where
         (self.width, self.height)
     }
 
-    fn render_line_clipped<DisplayType>(
-        &self,
-        display: &mut DisplayType,
-        y: u32,
-        left: u32,
-        right: u32,
-    ) where
-        DisplayType: Display,
-    {
+    fn render_row(&self, row: &mut RowRenderer, clip: &ClipRow, y: i32, offset: i32) {
         let (element_width, element_height) = self.element.size();
         let x_offset = match self.horizontal {
             HorizontalAlign::Left => 0,
@@ -385,12 +331,8 @@ where
             VerticalAlign::Center => (self.height as i32 - element_height as i32) / 2,
             VerticalAlign::Bottom => (self.height as i32 - element_height as i32),
         };
-        self.element.render_line(
-            display,
-            y as i32 - y_offset,
-            left as i32 - x_offset,
-            right as i32 - x_offset,
-        );
+        self.element
+            .render_row(row, clip, y as i32 + y_offset, offset as i32 + x_offset);
     }
 }
 
@@ -424,16 +366,8 @@ impl GUIElement for Fill {
         (self.width, self.height)
     }
 
-    fn render_line_clipped<DisplayType>(
-        &self,
-        display: &mut DisplayType,
-        _y: u32,
-        left: u32,
-        right: u32,
-    ) where
-        DisplayType: Display,
-    {
-        display.fill(right - left, self.color);
+    fn render_row(&self, row: &mut RowRenderer, clip: &ClipRow, _y: i32, offset: i32) {
+        row.fill(clip, offset, offset + self.width as i32, self.color);
     }
 }
 
@@ -457,7 +391,7 @@ impl Text {
 }
 
 impl GUIElement for Text {
-    fn resize(&mut self, width: u32, height: u32) {
+    fn resize(&mut self, _width: u32, _height: u32) {
         // Ignore, as the font dictates the size of the text.
     }
 
@@ -469,7 +403,11 @@ impl GUIElement for Text {
         (self.width, self.height)
     }
 
-    fn render_line_clipped<DisplayType>(
+    fn render_row(&self, row: &mut RowRenderer, clip: &ClipRow, y: i32, offset: i32) {
+        row.fill(clip, offset, offset + self.width as i32, Color::Black);
+        self.font.render_row(row, clip, self.text, y, offset);
+    }
+    /*fn render_line_clipped<DisplayType>(
         &self,
         display: &mut DisplayType,
         y: u32,
@@ -479,5 +417,7 @@ impl GUIElement for Text {
         DisplayType: Display,
     {
         self.font.render_line(display, self.text, y, left, right);
+    }*/
+}
     }
 }

@@ -1,5 +1,5 @@
 use super::rle::RLEImage;
-use crate::{Color, Display};
+use crate::{ClipRow, Color, RowRenderer};
 
 pub struct Font {
     pub ascender: u16,
@@ -22,105 +22,51 @@ impl Font {
         (width, (self.ascender + self.descender) as u32)
     }
 
-    pub fn render_line<DisplayType>(
+    pub fn render_row(
         &self,
-        display: &mut DisplayType,
+        row: &mut RowRenderer,
+        clip: &ClipRow,
         text: &str,
-        y: u32,
-        left: u32,
-        right: u32,
-    ) where
-        DisplayType: Display,
-    {
-        if right < left {
+        y: i32,
+        offset: i32,
+    ) {
+        // TODO: Do we need to fill the background?
+        row.fill(clip, 0, core::i32::MAX, Color::White);
+        if y < 1 || y > (self.ascender + self.descender) as i32 {
             return;
         }
-        if y > (self.ascender + self.descender) as u32 {
-            display.fill(right - left, Color::White);
-        }
-        let mut pos = 0;
+        let mut pos = offset;
+        // TODO: Discard glyphs if they are definitely not shown.
         for c in text.chars() {
-            // Discard glyphs early if they are not shown at all.
-            if pos >= right {
-                break;
-            }
             let index = (self.get_glyph_index)(c);
             if index.is_none() {
                 continue;
             }
             let glyph = &self.glyphs[index.unwrap()];
-            if pos + glyph.advance <= left {
-                pos += glyph.advance;
-                continue;
-            }
-
-            // Here, the glyph is at least partially shown. Transform the limits
-            // into local coordinates.
-            let glyph_left = if left < pos { 0 } else { left - pos };
-            let glyph_right = if right >= pos + glyph.advance {
-                glyph.advance
-            } else {
-                right - pos
-            };
-            self.render_glyph_line(display, glyph, y, glyph_left, glyph_right);
-            pos += glyph.advance;
+            self.render_glyph_row(row, clip, glyph, y, pos);
+            pos += glyph.advance as i32;
         }
     }
 
-    fn render_glyph_line<DisplayType>(
+    fn render_glyph_row(
         &self,
-        display: &mut DisplayType,
+        row: &mut RowRenderer,
+        clip: &ClipRow,
         glyph: &Glyph,
-        y: u32,
-        left: u32,
-        right: u32,
-    ) where
-        DisplayType: Display,
-    {
-        let min_y = self.ascender - glyph.image_top;
-        let max_y = min_y + glyph.image.height;
-        let min_x = glyph.image_left;
-        let max_x = min_x + glyph.image.width;
-
-        // Check whether the image is visible at all - if not, draw only the
-        // background.
-        if (y as u16) < min_y || y as u16 >= max_y {
-            display.fill(right - left, Color::White);
-            return;
-        }
-        if left as u16 >= max_x || right as u16 <= min_x {
-            display.fill(right - left, Color::White);
-            return;
-        }
-
-        // Left padding.
-        if min_x as u32 > left {
-            display.fill(min_x as u32 - left, Color::White);
-        }
-        // Image.
-        let image_left = if left < min_x as u32 {
-            0
-        } else {
-            left - min_x as u32
-        };
-        let image_right = if right > max_x as u32 {
-            max_x as u32 - min_x as u32
-        } else {
-            right - min_x as u32
-        };
+        y: i32,
+        offset: i32,
+    ) {
+        let image_offset = offset + glyph.image_left as i32;
+        let image_y = y - self.ascender as i32 + glyph.image_top as i32;
         glyph
             .image
-            .render_line(display, y - min_y as u32, image_left, image_right);
-        // Right padding.
-        if right > max_x as u32 {
-            display.fill(right - max_x as u32, Color::White);
-        }
+            .render_row_transparent(row, clip, image_y, image_offset);
     }
 }
 
 pub struct Glyph {
     pub image: RLEImage,
-    pub image_left: u16,
-    pub image_top: u16,
+    pub image_left: i16,
+    pub image_top: i16,
     pub advance: u32,
 }

@@ -1,7 +1,4 @@
-use crate::{Color, Display};
-
-use core::cmp::max;
-use core::cmp::min;
+use crate::{ClipRow, Color, RowRenderer};
 
 pub struct RLEImage {
     pub data: &'static [u16],
@@ -10,33 +7,35 @@ pub struct RLEImage {
 }
 
 impl RLEImage {
-    pub fn render_line<DisplayType>(&self, display: &mut DisplayType, y: u32, left: u32, right: u32)
-    where
-        DisplayType: Display,
-    {
+    pub fn render_row_transparent(
+        &self,
+        row: &mut RowRenderer,
+        clip: &ClipRow,
+        y: i32,
+        offset: i32,
+    ) {
+        if y < 0 {
+            return;
+        }
+        if y >= self.height as i32 {
+            return;
+        }
         let line_start = self.data[y as usize] as usize;
         let line_end = self.data[y as usize + 1] as usize;
         let line = &self.data[line_start..line_end];
 
         let mut pos = 0;
         for run in line {
-            if pos >= right {
-                break;
-            }
             let length = (run & 0x7fff) as u32;
-            if pos + length < left {
-                pos += length;
-                continue;
+            if (run >> 15) != 0u16 {
+                row.fill(
+                    clip,
+                    offset + pos,
+                    offset + pos + length as i32,
+                    Color::Black,
+                );
             }
-            let color = if (run >> 15) != 0u16 {
-                Color::Black
-            } else {
-                Color::White
-            };
-            let run_left = max(pos, left);
-            let run_right = min(pos + length, right);
-            display.fill(run_right - run_left, color);
-            pos += length;
+            pos += length as i32;
         }
     }
 }
