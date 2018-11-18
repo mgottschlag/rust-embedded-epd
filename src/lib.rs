@@ -1,7 +1,13 @@
+#![feature(extern_crate_item_prelude)]
 #![no_std]
 extern crate embedded_hal;
 #[macro_use(block)]
 extern crate nb;
+#[cfg(test)]
+#[macro_use]
+extern crate std;
+#[cfg(test)]
+use std::prelude::*;
 
 pub mod gdew042z15;
 pub mod gui;
@@ -118,5 +124,51 @@ impl BytePacking {
             self.current_pixels = 0;
             self.current_pixel_count = 0;
         }
+    }
+}
+
+#[cfg(test)]
+pub struct TestDisplay {
+    pub frame: Vec<u8>,
+    byte_packing: BytePacking,
+}
+
+#[cfg(test)]
+impl TestDisplay {
+    pub fn new() -> Self {
+        Self {
+            frame: Vec::new(),
+            byte_packing: BytePacking::new(),
+        }
+    }
+}
+
+#[cfg(test)]
+impl Display for TestDisplay {
+    const WIDTH: u32 = 320;
+    const HEIGHT: u32 = 240;
+
+    fn start_frame(&mut self) -> nb::Result<(), Error> {
+        self.frame = Vec::new();
+        Ok(())
+    }
+    fn end_frame(&mut self) {
+        assert!(self.frame.len() == (Self::WIDTH * Self::HEIGHT) as usize);
+    }
+
+    fn fill(&mut self, width: u32, color: Color) {
+        let mut bp = self.byte_packing.clone();
+        bp.fill(self, width, color);
+        self.byte_packing = bp;
+    }
+    fn pixel(&mut self, color: Color) {
+        let mut bp = self.byte_packing.clone();
+        bp.pixel(self, color);
+        self.byte_packing = bp;
+    }
+
+    fn put_byte(&mut self, byte: u8) {
+        assert!(self.frame.len() < (Self::WIDTH * Self::HEIGHT) as usize);
+        self.frame.push(byte);
     }
 }
