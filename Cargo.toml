@@ -8,6 +8,6 @@ license = "MIT"
 repository = "https://github.com/mgottschlag/rust-embedded-epd"
 
 [dependencies]
-embedded-hal = { version = "0.2.1", features = ["unproven"] }
+embedded-hal = { version = "0.2.3", features = ["unproven"] }
 nb = "0.1.1"
 

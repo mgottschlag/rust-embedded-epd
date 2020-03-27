@@ -21,10 +21,10 @@ pub struct GDEW042Z15<SPI, Busy, Reset, DataCmd, CS, Timer> {
 impl<SPI, Busy, Reset, DataCmd, CS, Timer> GDEW042Z15<SPI, Busy, Reset, DataCmd, CS, Timer>
 where
     SPI: embedded_hal::spi::FullDuplex<u8>,
-    Busy: embedded_hal::digital::InputPin,
-    Reset: embedded_hal::digital::OutputPin,
-    DataCmd: embedded_hal::digital::OutputPin,
-    CS: embedded_hal::digital::OutputPin,
+    Busy: embedded_hal::digital::v2::InputPin,
+    Reset: embedded_hal::digital::v2::OutputPin,
+    DataCmd: embedded_hal::digital::v2::OutputPin,
+    CS: embedded_hal::digital::v2::OutputPin,
     Timer: embedded_hal::timer::CountDown<Time = Hertz>,
 {
     pub fn new(
@@ -35,9 +35,9 @@ where
         mut cs: CS,
         timer: Timer,
     ) -> Self {
-        reset.set_high();
-        data_cmd.set_high();
-        cs.set_high();
+        reset.set_high().ok();
+        data_cmd.set_high().ok();
+        cs.set_high().ok();
         GDEW042Z15 {
             spi: spi,
             busy: busy,
@@ -54,12 +54,12 @@ where
             InitState::Uninitialized => {
                 // Wait until the display is idle (busy pin = 1) before
                 // continuing.
-                if self.busy.is_low() {
+                if self.busy.is_low().ok().unwrap() {
                     return Err(nb::Error::WouldBlock);
                 }
 
                 // Assert reset for 100ms.
-                self.reset.set_low();
+                self.reset.set_low().ok();
                 self.timer.start(Hertz(10));
 
                 self.init_state = InitState::Resetting1;
@@ -71,7 +71,7 @@ where
                 }
 
                 // Wait 100ms for reinitialization.
-                self.reset.set_high();
+                self.reset.set_high().ok();
                 self.timer.start(Hertz(10));
 
                 self.init_state = InitState::Resetting2;
@@ -93,7 +93,7 @@ where
             }
             InitState::Resetting3 => {
                 // Wait until idle.
-                if self.busy.is_low() {
+                if self.busy.is_low().ok().unwrap() {
                     return Err(nb::Error::WouldBlock);
                 }
                 self.send_command(DisplayCommand::PanelSetting);
@@ -117,22 +117,22 @@ where
     }
 
     fn send_command(&mut self, command: DisplayCommand) {
-        self.data_cmd.set_low();
-        self.cs.set_low();
+        self.data_cmd.set_low().ok();
+        self.cs.set_low().ok();
         let command = command as u8;
         // TODO: Error handling?
         block!(self.spi.send(command)).ok();
         block!(self.spi.read()).ok();
-        self.cs.set_high();
+        self.cs.set_high().ok();
     }
 
     fn send_data(&mut self, data: u8) {
-        self.data_cmd.set_high();
-        self.cs.set_low();
+        self.data_cmd.set_high().ok();
+        self.cs.set_low().ok();
         // TODO: Error handling?
         block!(self.spi.send(data)).ok();
         block!(self.spi.read()).ok();
-        self.cs.set_high();
+        self.cs.set_high().ok();
     }
 
     fn delay_2ms(&mut self) {
@@ -150,17 +150,17 @@ impl<SPI, Busy, Reset, DataCmd, CS, Timer> Display
     for GDEW042Z15<SPI, Busy, Reset, DataCmd, CS, Timer>
 where
     SPI: embedded_hal::spi::FullDuplex<u8>,
-    Busy: embedded_hal::digital::InputPin,
-    Reset: embedded_hal::digital::OutputPin,
-    DataCmd: embedded_hal::digital::OutputPin,
-    CS: embedded_hal::digital::OutputPin,
+    Busy: embedded_hal::digital::v2::InputPin,
+    Reset: embedded_hal::digital::v2::OutputPin,
+    DataCmd: embedded_hal::digital::v2::OutputPin,
+    CS: embedded_hal::digital::v2::OutputPin,
     Timer: embedded_hal::timer::CountDown<Time = Hertz>,
 {
     const WIDTH: u32 = 400;
     const HEIGHT: u32 = 300;
 
     fn start_frame(&mut self) -> nb::Result<(), Error> {
-        if self.busy.is_low() {
+        if self.busy.is_low().ok().unwrap() {
             return Err(nb::Error::WouldBlock);
         }
         self.send_command(DisplayCommand::DataStartTransmission1);
