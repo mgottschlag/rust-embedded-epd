@@ -1,5 +1,5 @@
-use super::rle::RLEImage;
-use crate::{ClipRow, Color, RowRenderer};
+use super::image::RLEImage;
+use crate::{ClipRow, RowRenderer};
 
 pub struct Font {
     pub ascender: u16,
@@ -31,7 +31,7 @@ impl Font {
         offset: i32,
     ) {
         // TODO: Do we need to fill the background?
-        row.fill(clip, 0, core::i32::MAX, Color::White);
+        //row.fill(clip, 0, core::i32::MAX, Color::White);
         if y < 1 || y > (self.ascender + self.descender) as i32 {
             return;
         }

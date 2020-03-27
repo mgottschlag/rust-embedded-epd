@@ -3,7 +3,7 @@ use crate::{ClipRow, Color, Display, PartialRefresh, RowRenderer};
 use core::cmp::max;
 
 pub mod font;
-pub mod rle;
+pub mod image;
 
 pub trait GUIElement {
     fn resize(&mut self, width: u32, height: u32);
@@ -308,7 +308,8 @@ where
     fn resize(&mut self, width: u32, height: u32) {
         self.width = width;
         self.height = height;
-        self.element.resize(width, height);
+        self.element
+            .resize(self.element.min_size().0, self.element.min_size().1);
     }
 
     fn min_size(&self) -> (u32, u32) {
@@ -404,20 +405,34 @@ impl GUIElement for Text {
     }
 
     fn render_row(&self, row: &mut RowRenderer, clip: &ClipRow, y: i32, offset: i32) {
-        row.fill(clip, offset, offset + self.width as i32, Color::Black);
         self.font.render_row(row, clip, self.text, y, offset);
     }
-    /*fn render_line_clipped<DisplayType>(
-        &self,
-        display: &mut DisplayType,
-        y: u32,
-        left: u32,
-        right: u32,
-    ) where
-        DisplayType: Display,
-    {
-        self.font.render_line(display, self.text, y, left, right);
-    }*/
 }
+
+pub struct Image {
+    image: &'static image::BitmapImage,
+}
+
+impl Image {
+    pub fn new(image: &'static image::BitmapImage) -> Image {
+        Image { image: image }
+    }
+}
+
+impl GUIElement for Image {
+    fn resize(&mut self, _width: u32, _height: u32) {
+        // Ignore, as the image dictates the size.
+    }
+
+    fn min_size(&self) -> (u32, u32) {
+        (self.image.width as u32, self.image.height as u32)
+    }
+
+    fn size(&self) -> (u32, u32) {
+        (self.image.width as u32, self.image.height as u32)
+    }
+
+    fn render_row(&self, row: &mut RowRenderer, clip: &ClipRow, y: i32, offset: i32) {
+        self.image.render_row_transparent(row, clip, y, offset);
     }
 }

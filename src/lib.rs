@@ -1,4 +1,3 @@
-#![feature(extern_crate_item_prelude)]
 #![no_std]
 extern crate embedded_hal;
 #[macro_use(block)]
@@ -117,9 +116,21 @@ impl<'a> RowRenderer<'a> {
         }
     }
 
-    pub fn render_bitmap(&mut self, _clip: &ClipRow, _left: i32, _right: i32, _bits: &[u8]) {
-        // TODO
-        panic!("Not yet implemented.");
+    pub fn render_bitmap(&mut self, clip: &ClipRow, left: i32, right: i32, bits: &[u8]) {
+        let line_clip = clip.clip(left, right);
+        if line_clip.is_empty() {
+            return;
+        }
+
+        for x in line_clip.get().0..line_clip.get().1 {
+            let byte = (x - left) / 8;
+            let bit = (x - left) & 7;
+            if (bits[byte as usize] & (1 << bit)) != 0 {
+                self.buffer[(x / 8) as usize] |= 0x80 >> (x & 7);
+            } else {
+                self.buffer[(x / 8) as usize] &= !(0x80 >> (x & 7));
+            }
+        }
     }
 
     pub fn full_row(&self) -> ClipRow {
